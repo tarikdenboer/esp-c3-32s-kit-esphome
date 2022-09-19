@@ -1,0 +1,114 @@
+substitutions:
+  device_name: test-esp-c3-32s-kit
+
+esphome:
+  name: ${device_name}
+  platformio_options:
+    monitor_speed: 115200
+    board_build.mcu: esp32c3
+    board_build.variant: esp32c3
+    board_build.flash_mode: dio 
+    board_upload.flash_size: "2MB"
+    board_upload.maximum_size: 2097152
+    board_build.partitions: c3_2mb_partition.csv
+
+
+esp32:
+  board: esp32dev
+  variant: ESP32C3
+  framework:
+    type: esp-idf
+    version: recommended
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret API_Password #credentials from ESPHome secrets file
+
+
+#Wifi Setup
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password #credentials from ESPHome secrets file
+
+# Enable fallback hotspot in case wifi connection fails
+  ap:
+    ssid: ${device_name}
+    password: !secret AP_Password #credentials from ESPHome secrets file
+    
+sensor:
+#Wifi signal strength sensor
+  - platform: wifi_signal
+    name: ${device_name} Wifi RSSI
+    update_interval: 120s
+#Uptime sensor internal
+  - platform: uptime
+    id: uptime_sensor
+    update_interval: 60s
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id: uptime_human
+            state: !lambda |-
+              int seconds = round(id(uptime_sensor).raw_state);
+              int days = seconds / (24 * 3600);
+              seconds = seconds % (24 * 3600);
+              int hours = seconds / 3600;
+              seconds = seconds % 3600;
+              int minutes = seconds /  60;
+              seconds = seconds % 60;
+              return (
+                (days ? to_string(days) + "d " : "") +
+                (hours ? to_string(hours) + "h " : "") +
+                (minutes ? to_string(minutes) + "m " : "") +
+                (to_string(seconds) + "s")
+              ).c_str();
+    
+text_sensor:
+#Wifi info sensor
+  - platform: wifi_info
+    ip_address:
+      name: ${device_name} IP Address
+      update_interval: 300s
+    ssid:
+      name: ${device_name} Wi-Fi SSID
+      update_interval: 300s
+    bssid:
+      name: ${device_name} Wi-Fi BSSID
+      update_interval: 300s
+#ESPHome version sensor
+  - platform: version
+    name: ${device_name} ESPHome Version
+    hide_timestamp: true
+#Uptime sensor in human readable format to publish to Home Assistant
+  - platform: template
+    name: ${device_name} Uptime
+    id: uptime_human
+    icon: mdi:clock-start
+
+
+#Setup for the onboard RGB LED to be controlled as a light
+output:
+  - platform: ledc
+    pin: GPIO3
+    id: onboard_red
+    max_power: 37%
+  - platform: ledc
+    pin: GPIO4
+    id: onboard_green
+    max_power: 37%
+  - platform: ledc
+    pin: GPIO5
+    id: onboard_blue
+    max_power: 37%
+    
+light:
+  - platform: rgb
+    name: "Onboard RGB"
+    id: onboard_rgb
+    red: onboard_red
+    green: onboard_green
+    blue: onboard_blue
+    restore_mode: ALWAYS_ON
